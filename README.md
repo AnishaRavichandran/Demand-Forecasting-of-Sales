@@ -1,223 +1,80 @@
-# 📦 Flipkart Sales Forecasting — End-to-End ML Pipeline
+# Demand Forecasting for Online Retail Using Machine Learning
 
-A machine learning pipeline that compresses **~127 million rows** of Flipkart sales transaction data into a compact analytical dataset and trains multiple forecasting models to predict order volumes.
+Predicting future order demand from historical e-commerce sales data, and comparing Linear Regression (with PCA), Random Forest, XGBoost, LSTM and ARIMA.
 
----
-## 🗂️ Project Overview
+## Business Goal
 
-This project tackles the challenge of working with massive e-commerce transactional data. The raw data spans **two datasets totalling ~127 million rows** of individual order records from Flipkart, covering product categories, sellers, price buckets, and order metrics (orders, units, GMV).
+Help online retail platforms streamline supply chain management, minimise excess inventory and improve customer satisfaction.
 
-The goal is to:
-1. Compress the data to a manageable size without losing business insights
-2. Engineer meaningful time-series features
-3. Train and compare multiple forecasting models to predict `orders`
+**Aim:** Accurately predict future demand by training machine learning models on historical sales data.
 
----
+## Dataset
 
-## 📁 Dataset
-
-| Dataset   | Raw Rows   | Columns | Memory   |
-|-----------|------------|---------|----------|
-| dataset1  | 56,118,563 | 17      | ~7.1 GB  |
-| dataset2  | 71,731,038 | 17      | ~9.1 GB  |
-| **Total** | **~127M**  |         | **~16 GB** |
-
-### Key Columns
+Two large sales extracts (about 56M and 72M rows) from an online marketplace, covering 2020 to 2024. The data is proprietary and is not included in this repository.
 
 | Column | Description |
-|--------|-------------|
-| `cms_vertical` | Product vertical (e.g., ab_exerciser) |
-| `price_bucket` | Price range category (e.g., 0–100, 500+) |
-| `brand` | Product brand |
-| `seller_id` / `seller_city` | Seller details |
-| `analytic_business_unit` | Business unit (e.g., BGM, Home) |
-| `analytic_super_category` | Super category (e.g., SportFitness) |
-| `analytic_category` | Category (e.g., ExerciseAndFitness) |
-| `analytic_vertical` | Vertical (e.g., AbExerciser) |
-| `status` | Order status (DELIVERED, RETURNED) |
-| `unit_creation_month` / `unit_creation_year` | Time of order |
-| `orders` | Number of orders (target variable) |
-| `units` | Number of units sold |
-| `gmv` | Gross Merchandise Value (₹) |
+|---|---|
+| `analytic_business_unit`, `analytic_super_category`, `analytic_category`, `analytic_vertical`, `cms_vertical` | Product hierarchy |
+| `price_bucket` | Price range (`0-300`, `300-500`, `500+`) |
+| `units`, `gmv` | Units sold, gross merchandise value |
+| `orders` | Number of orders (**target**) |
 
----
+## What I Did
 
-## 🗜️ Data Reduction Pipeline
+**1. Data collection and preprocessing** (`01_Data_Collection_and_Preprocessing.ipynb`)
+- Aggregated each raw file by product hierarchy, price bucket, month and year, reducing about 128M rows to about 1.1M.
+- Merged the two files, grouped price buckets from 7 to 3, removed nulls and built a monthly `date` column.
+- Final modelling dataset: about 570K monthly records across product segments.
 
-The compression from **~127 million → ~1.1 million rows** was achieved through the following steps:
+**2. Feature engineering**
+- Lag features: previous month's `orders`, `units`, `gmv`.
+- 3-month moving averages of `orders`, `units`, `gmv`, using previous months only to avoid leakage.
+- All features are computed within each product segment.
 
-### Step 1 — GroupBy Aggregation *(Primary Compression)*
+**3. Exploratory analysis** (`02_ML_Models_Training_and_Results.ipynb`)
+- Checked missing values and duplicates, target skewness and the monthly order trend.
+- Found heteroscedasticity (Breusch-Pagan test) and strong multicollinearity (VIF and correlation matrix).
 
-Individual transaction rows are aggregated by 8 business-level dimensions, summing numeric metrics:
+**4. Train/test split**
+- Chronological split: train on 2020 to 2023, test on 2024.
+- XGBoost tuning used 2020 to 2022 for training and 2023 for validation.
 
-```python
-columns_to_group_by = [
-    'analytic_business_unit', 'analytic_super_category',
-    'analytic_category', 'analytic_vertical', 'cms_vertical',
-    'price_bucket', 'unit_creation_month', 'unit_creation_year'
-]
+**5. Modelling**
 
-df_reduced = df.groupby(columns_to_group_by)[['orders', 'units', 'gmv']].sum()
-```
+| Model | Approach |
+|---|---|
+| Linear Regression | Baseline on raw features, then with scaling and PCA to handle multicollinearity. Ridge regression also tested. |
+| Random Forest | 100 trees |
+| XGBoost | Grid search over `max_depth` and `learning_rate`; best was depth 3, learning rate 0.10, 300 trees |
+| LSTM | Sequence model with a 3-month window per product segment |
+| ARIMA | Trained separately (`03_ARIMA_Model_Training.ipynb`) on total monthly orders. ADF test showed stationarity, so d = 0. Order (1,0,1) was chosen via validation RMSE, AIC and BIC. |
 
-| Dataset  | Before       | After     | Reduction |
-|----------|--------------|-----------|-----------|
-| dataset1 | 56,118,563   | 460,693   | ~99.2%    |
-| dataset2 | 71,731,038   | 652,073   | ~99.1%    |
+## Results (Test Set: 2024)
 
-Seller-level and brand-level granularity is dropped — only business-unit/category/time combinations are retained.
+| Model | RMSE | MAE | R² |
+|---|---:|---:|---:|
+| **Linear Regression (PCA)** | **18,258.79** | 2,364.25 | **0.91** |
+| Random Forest | 19,653.84 | **2,238.34** | 0.90 |
+| LSTM | 24,118.21 | 3,991.56 | 0.85 |
+| XGBoost | 33,661.77 | 2,697.07 | 0.70 |
 
-### Step 2 — Price Bucket Merging
+![Model Comparison](images/model_comparison.png)
 
-7 granular price buckets are consolidated into 3 broader buckets:
+**ARIMA** works on aggregated monthly orders, so its errors are on a different scale and cannot be compared with the table above. On the monthly totals it achieved MAPE 11.99% and SMAPE 13.36%.
 
-```python
-mapping = {
-    '0-100': '0-300', '100-150': '0-300',
-    '150-200': '0-300', '200-300': '0-300',
-    '300-400': '300-500', '400-500': '300-500',
-    '500+': '500+'
-}
-df['price_bucket'] = df['price_bucket'].replace(mapping)
-```
+![ARIMA Forecast](images/arima_actual_vs_predicted.png)
 
-### Step 3 — Concat & Re-aggregate
+**Takeaways**
+- Linear Regression with PCA had the lowest RMSE and highest R². Random Forest had the lowest MAE.
+- PCA improved the linear model by removing multicollinearity, and Ridge regularisation changed little, so overfitting was not a concern.
+- The more complex models (XGBoost, LSTM) did not outperform simpler ones on this feature set.
 
-Both reduced datasets are concatenated and re-grouped to merge overlapping category/time combinations across the two sources.
+## Technologies
 
-### Step 4 — Datetime Construction
+Python, Pandas, NumPy, Scikit-learn, XGBoost, Statsmodels, TensorFlow/Keras, Matplotlib, Seaborn, Jupyter
 
-Month and year columns are combined into a proper datetime index for time-series operations:
+## Author
 
-```python
-df['date'] = pd.to_datetime(
-    df['unit_creation_year'].astype(int).astype(str) + '-' +
-    df['unit_creation_month'].astype(int).astype(str) + '-01'
-)
-```
-
-### Step 5 — NaN Removal
-
-Rows with nulls (introduced by lag and rolling-average operations) are dropped.
-
-**Final dataset: ~1.1 million rows, 11 columns, ~93 MB in memory.**
-
----
-
-## 🔧 Feature Engineering
-
-Time-series features are created per business category group (not global), preserving local trends:
-
-### Lag Features (Previous Month)
-```python
-df['orders_lag_1'] = df.groupby([...])['orders'].shift(1)
-df['units_lag_1']  = df.groupby([...])['units'].shift(1)
-df['gmv_lag_1']    = df.groupby([...])['gmv'].shift(1)
-```
-
-### Moving Average Features (3-Month Rolling)
-```python
-df['orders_ma_3'] = df.groupby([...])['orders'].transform(
-    lambda x: x.rolling(3, min_periods=1).mean()
-)
-```
-
-> **Note:** Moving averages are used for feature engineering (model inputs), **not** for data compression.
-
-### Final Feature Set
-
-| Feature | Description |
-|---------|-------------|
-| `month` | Month extracted from date |
-| `year` | Year extracted from date |
-| `orders_lag_1` | Previous month's orders (per group) |
-| `units_lag_1` | Previous month's units (per group) |
-| `gmv_lag_1` | Previous month's GMV (per group) |
-| `orders_ma_3` | 3-month rolling average of orders |
-| `units_ma_3` | 3-month rolling average of units |
-| `gmv_ma_3` | 3-month rolling average of GMV |
-
-**Target variable:** `orders`
-
----
-
-## 📊 Statistical Tests
-
-Before modelling, three statistical checks are performed on the data:
-
-| Test | Result | Interpretation |
-|------|--------|----------------|
-| **Shapiro-Wilk** (Normality) | Statistic = 0.1539 | Data is NOT normally distributed |
-| **ADF Test** (Stationarity) | Data IS stationary | Safe to use for time-series modelling without differencing |
-| **VIF** (Multicollinearity) | High across lag and MA features | Significant multicollinearity between lag and moving-average features |
-
-> The high VIF values indicate that lag and moving-average features are highly correlated with each other. Tree-based models (Random Forest, XGBoost) handle this better than Linear Regression.
-
----
-
-## 🤖 Models Trained
-
-Five forecasting models are trained and compared:
-
-| Model | Type | Notes |
-|-------|------|-------|
-| **Linear Regression** | Parametric | Baseline; affected by multicollinearity |
-| **Random Forest** | Ensemble (tree-based) | Handles non-linearity and collinearity well |
-| **XGBoost** | Gradient Boosting | Fast, regularised boosting |
-| **LSTM** | Deep Learning (RNN) | Sequence model; trained on PCA-reduced features |
-| **ARIMA** | Statistical time-series | Univariate; trained on `orders` series only |
-
-All models use an **80/20 train-test split**. LSTM and ARIMA use **PCA-compressed features** (2 principal components) as input.
-
----
-
-## 📈 Results
-
-### Without PCA (Linear Regression & Random Forest)
-
-| Model | RMSE | MAPE |
-|-------|------|------|
-| Linear Regression | 10,699.99 | 7.16 |
-| Random Forest | 10,610.15 | 4.10 |
-
-### With PCA (All Models)
-
-| Model | RMSE | MAE | MAPE | SMAPE | R² Score |
-|-------|------|-----|------|-------|----------|
-| **Linear Regression** | **0.376** | 0.044 | 0.468 | 18.3 | **0.849** |
-| Random Forest | 0.495 | 0.045 | 0.538 | 15.6 | 0.738 |
-| XGBoost | 0.604 | 0.049 | 0.460 | 14.5 | 0.610 |
-| ARIMA | 1.106 | 0.177 | 2.675 | 43.3 | -0.026 |
-| LSTM | 2.223 | 0.254 | 1.076 | 183.4 | -3.141 |
-
-> ✅ **Best model: Linear Regression** (after PCA) with R² = 0.849  
-> ⚠️ LSTM and ARIMA underperform on this aggregated dataset — likely due to limited training epochs and univariate structure respectively.
-
-### Direct ML on Raw Features (Final Evaluation)
-
-| Model | RMSE | MAE | R² Score |
-|-------|------|-----|----------|
-| Random Forest | 12,298.63 | 1,364.56 | 0.95 |
-| XGBoost | 29,017.61 | 2,001.61 | 0.70 |
-
-> 🏆 **Random Forest achieves R² = 0.95 on the original feature space**, making it the strongest practical model for this dataset.
-
----
-
-
-
-
-
-## 💡 Key Takeaways
-
-- **GroupBy aggregation is the real compression technique** — not moving averages. It reduced 127M rows to ~1.1M rows (99%+ reduction) by collapsing individual transactions into business-level monthly summaries.
-- **Moving averages serve as predictive features**, not compression tools.
-- **Random Forest** is the strongest model for this structured, aggregated dataset.
-- **LSTM underperforms** without sufficient sequence length and training depth.
-- **High VIF** in lag/MA features is expected and manageable for tree-based models.
-
----
-
-
-
----
+**Anisha Priyadarshini R**
+MSc Computing (Artificial Intelligence)
+[LinkedIn](your-link) | [GitHub](your-link)
