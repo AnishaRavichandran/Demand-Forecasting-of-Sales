@@ -21,23 +21,24 @@ Two large sales extracts (about 56M and 72M rows) from an online marketplace, co
 
 ## What I Did
 
-**1. Data collection and preprocessing** (`01_Data_Collection_and_Preprocessing.ipynb`)
-- Aggregated each raw file by product hierarchy, price bucket, month and year, reducing about 128M rows to about 1.1M.
+**1. Data collection and preprocessing** 
+- Aggregated each raw file by product hierarchy(using groupby() method), reducing about 128M rows to about 1.1M.
 - Merged the two files, grouped price buckets from 7 to 3, removed nulls and built a monthly `date` column.
-- Final modelling dataset: about 570K monthly records across product segments.
+- Final modelling dataset: about 570K records across product segments.
 
 **2. Feature engineering**
 - Lag features: previous month's `orders`, `units`, `gmv`.
 - 3-month moving averages of `orders`, `units`, `gmv`, using previous months only to avoid leakage.
-- All features are computed within each product segment.
+- All features are computed within each product segment, not globally.
 
-**3. Exploratory analysis** (`02_ML_Models_Training_and_Results.ipynb`)
+**3. Exploratory analysis** 
 - Checked missing values and duplicates, target skewness and the monthly order trend.
 - Found heteroscedasticity (Breusch-Pagan test) and strong multicollinearity (VIF and correlation matrix).
+- ADF Test performed before training time series based models; Results showed that data is Stationary.
 
 **4. Train/test split**
 - Chronological split: train on 2020 to 2023, test on 2024.
-- XGBoost tuning used 2020 to 2022 for training and 2023 for validation.
+- Hyperparameter tuning was done in appropriate models to achieve optimal results.
 
 **5. Modelling**
 
@@ -47,7 +48,7 @@ Two large sales extracts (about 56M and 72M rows) from an online marketplace, co
 | Random Forest | 100 trees |
 | XGBoost | Grid search over `max_depth` and `learning_rate`; best was depth 3, learning rate 0.10, 300 trees |
 | LSTM | Sequence model with a 3-month window per product segment |
-| ARIMA | Trained separately (`03_ARIMA_Model_Training.ipynb`) on total monthly orders. ADF test showed stationarity, so d = 0. Order (1,0,1) was chosen via validation RMSE, AIC and BIC. |
+| ARIMA | Trained separately  on total monthly orders. ADF test showed stationarity, so d = 0. Order (1,0,1) was chosen via validation RMSE, AIC and BIC. |
 
 ## Results (Test Set: 2024)
 
@@ -69,6 +70,7 @@ Two large sales extracts (about 56M and 72M rows) from an online marketplace, co
 - PCA improved the linear model by removing multicollinearity, and Ridge regularisation changed little, so overfitting was not a concern.
 - The more complex models (XGBoost, LSTM) did not outperform simpler ones on this feature set.
 - ARIMA captured the overall trend reasonably.
+- Proper feature extraction and Hyperparameter tuning needs to be done according to each model to achieve the best performance scores.
 
 ## Technologies
 
