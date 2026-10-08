@@ -45,7 +45,7 @@ Two large sales extracts (about 56M and 72M rows) from an online marketplace, co
 | Model | Approach |
 |---|---|
 | Linear Regression | Baseline on raw features, then with scaling and PCA to handle multicollinearity. Ridge regression also tested. |
-| Random Forest | 100 trees, Important feature was found to be orders_ma_3 |
+| Random Forest | 100 trees, most important feature was found to be orders_ma_3 |
 | XGBoost | Grid search over `max_depth` and `learning_rate`; best was depth 3, learning rate 0.10, 300 trees |
 | LSTM | Sequence model with a 3-month window per product segment |
 | ARIMA | Trained separately  on total monthly orders. ADF test showed stationarity, so d = 0. Order (1,0,1) was chosen via validation RMSE, AIC and BIC. |
