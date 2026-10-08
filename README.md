@@ -58,23 +58,19 @@ Two large sales extracts (about 56M and 72M rows) from an online marketplace, co
 | LSTM | 24,118.21 | 3,991.56 | 0.85 |
 | XGBoost | 33,661.77 | 2,697.07 | 0.70 |
 
-![Model Comparison](images/model_comparison.png)
+
 
 **ARIMA** works on aggregated monthly orders, so its errors are on a different scale and cannot be compared with the table above. On the monthly totals it achieved MAPE 11.99% and SMAPE 13.36%.
 
-![ARIMA Forecast](images/arima_actual_vs_predicted.png)
+
 
 **Takeaways**
 - Linear Regression with PCA had the lowest RMSE and highest R². Random Forest had the lowest MAE.
 - PCA improved the linear model by removing multicollinearity, and Ridge regularisation changed little, so overfitting was not a concern.
 - The more complex models (XGBoost, LSTM) did not outperform simpler ones on this feature set.
+- ARIMA captured the overall trend reasonably.
 
 ## Technologies
 
 Python, Pandas, NumPy, Scikit-learn, XGBoost, Statsmodels, TensorFlow/Keras, Matplotlib, Seaborn, Jupyter
 
-## Author
-
-**Anisha Priyadarshini R**
-MSc Computing (Artificial Intelligence)
-[LinkedIn](your-link) | [GitHub](your-link)
