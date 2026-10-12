@@ -71,6 +71,7 @@ Two large sales extracts (about 56M and 72M rows) from an online marketplace, co
 - The more complex models (XGBoost, LSTM) did not outperform simpler ones on this feature set.
 - ARIMA captured the overall trend reasonably.
 - Proper feature extraction and Hyperparameter tuning needs to be done according to each model to achieve the best performance scores.
+- Models struggled with extreme sales spikes, suggesting need for external factors.
 
 ## Technologies
 
